@@ -110,7 +110,7 @@ class MarcRecord extends HTMLElement {
                 </div>
                 </div>
                 <div class="modal-footer">
-                <button type="button" class="btn btn-primary">Create this authority (not implemented yet)</button>
+                <a class="btn btn-primary" href="/records/auths/new" target="_blank">Create New Authority</a>
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Exit </button>
                 </div>
             </div>
