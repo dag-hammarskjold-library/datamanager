@@ -3,7 +3,7 @@ from json import loads as load_json, JSONDecodeError
 from copy import copy
 from uuid import uuid1
 from urllib.parse import unquote
-from flask import Flask, Response, g, url_for, jsonify, request, abort as flask_abort
+from flask import Flask, Response, g, url_for, jsonify, request, abort as flask_abort, send_file
 from flask_restx import Resource, Api, reqparse
 from flask_login import login_required, current_user
 from flask_cors import CORS
@@ -16,6 +16,9 @@ from dlx_rest.app import app, login_manager
 from dlx_rest.models import User
 from pymongo import ASCENDING as ASC, DESCENDING as DESC
 from bson import Regex
+import boto3
+import mimetypes
+import re
 
 #authorizations  
 authorizations = {
@@ -41,6 +44,7 @@ list_argparser.add_argument('search', type=str, help='Consult documentation for 
 
 resource_argparser = reqparse.RequestParser()
 resource_argparser.add_argument('format', type=str, help='Valid formats are "json", "xml", "mrc", "mrk", "txt"')
+resource_argparser.add_argument('action', type=str, help='Valid actions are "download"')
 
 post_put_argparser = reqparse.RequestParser()
 post_put_argparser.add_argument('format', help="The format of the data being sent through the HTTP request")
@@ -85,7 +89,8 @@ def abort(code, message=None):
 class ClassDispatch():
     index = {
         Config.BIB_COLLECTION: Bib,
-        Config.AUTH_COLLECTION: Auth
+        Config.AUTH_COLLECTION: Auth,
+        Config.FILE_COLLECTION: File
     }
     
     batch_index = {
@@ -231,30 +236,49 @@ class RecordResponse():
     def __init__(self, endpoint, record, **kwargs):
         self.record = record
         self.url = URL(endpoint, **kwargs).to_str()
+        try:
+            self.collection = kwargs['collection']
+        except:
+            pass
 
     def json(self):
-        files = []
-        
-        for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
-            f = File.latest_by_identifier_language(
-                Identifier('symbol', self.record.get_value('191', 'a') or self.record.get_value('791', 'a')), 
-                lang
-            )
+        if self.collection == 'files':
+
+            data = {
+                '_links': self.url,
+                'result': self.record.to_dict()
+            }
+        else:
+            files = []
             
-            if f:
-                files.append(
-                    {
-                        'mimetype': f.mimetype,
-                        'language': lang.lower(),
-                        'url': 'https://' + f.uri
-                    }
+            for lang in ('AR', 'ZH', 'EN', 'FR', 'RU', 'ES', 'DE'):
+                f = File.latest_by_identifier_language(
+                    Identifier('symbol', self.record.get_value('191', 'a') or self.record.get_value('791', 'a')), 
+                    lang
                 )
-        
-        data = {
-            '_links': {'self': self.url},
-            'result': self.record.to_dict(),
-            'files': files
-        }
+                
+                if f:
+                    filename = f.filename
+                    identifiers = []
+                    for idx in f.identifiers:
+                        identifiers.append(idx.value)
+                    if f.filename is None:
+                        filename = File.encode_fn(identifiers,lang,'pdf')
+                    files.append(
+                        {
+                            'id': f.id,
+                            'mimetype': f.mimetype,
+                            'language': lang.lower(),
+                            'filename': filename,
+                            'url': 'https://' + f.uri
+                        }
+                    )
+            
+            data = {
+                '_links': {'self': self.url},
+                'result': self.record.to_dict(),
+                'files': files
+            }
 
         return jsonify(data)
         
@@ -770,15 +794,46 @@ class RecordFieldSubfieldValue(Resource):
 
         return response.json()
 
-@ns.route('/<string:collection>/<int:record_id>')
+@ns.route('/<string:collection>/<string:record_id>')
 @ns.param('record_id', 'The record identifier')
-@ns.param('collection', '"bibs" or "auths"')
+@ns.param('collection', '"bibs", "auths", or "files"')
 class Record(Resource):
     @ns.doc(description='Return the record with the given identifier')
     @ns.expect(resource_argparser)
     def get(self, collection, record_id):
         cls = ClassDispatch.by_collection(collection) or abort(404)
-        record = cls.from_id(record_id) or abort(404)
+        if collection == 'files':
+            record = cls.from_id(str(record_id)) or abort(404)
+            if record.filename is None:
+                ids = []
+                for idx in record.identifiers:
+                    ids.append(idx.value)
+                
+                langs = []
+                for lang in record.languages:
+                    langs.append(lang)
+
+                    
+
+                extension = mimetypes.guess_extension(record.mimetype)
+                print(extension)
+
+                record.filename = File.encode_fn(ids, langs, extension)
+            args = resource_argparser.parse_args()
+
+            action = args.get('action', None)
+            if action == 'download':
+                output_filename = record.filename
+                s3 = boto3.client('s3')
+                try:
+                    s3_file = s3.get_object(Bucket=Config.bucket, Key=record_id)
+                except:
+                    raise
+                    abort(404)
+
+                return send_file(s3_file['Body'], as_attachment=True, attachment_filename=output_filename)
+        else:
+            record = cls.from_id(int(record_id)) or abort(404)
 
         response = RecordResponse(
             'api_record',
@@ -788,8 +843,8 @@ class Record(Resource):
         )
 
         args = resource_argparser.parse_args()
+            
         fmt = args.get('format', None)
-        
         if fmt:
             try:
                 return getattr(response, fmt)()
@@ -800,6 +855,8 @@ class Record(Resource):
         else:
             return response.json()
 
+        
+
     @ns.doc(description='Replace the record with the given data.', security='basic')
     @ns.expect(post_put_argparser)
     @login_required
@@ -808,12 +865,18 @@ class Record(Resource):
         args = post_put_argparser.parse_args()
         
         cls = ClassDispatch.by_collection(collection) or abort(404)
-        record = cls.from_id(record_id) or abort(404)
+
+        if collection == 'files':
+            rid = str(record_id)
+        else:
+            rid = int(record_id)
+
+        record = cls.from_id(rid) or abort(404)
 
         if args.format == 'mrk':
             try:
                 record = cls.from_mrk(request.data.decode())
-                record.id = record_id
+                record.id = rid
                 result = record.commit(user=user)
             except Exception as e:
                 abort(400, str(e))
@@ -838,7 +901,10 @@ class Record(Resource):
         user = 'testing' if current_user.is_anonymous else current_user.email
         
         cls = ClassDispatch.by_collection(collection) or abort(404)
-        record = cls.from_id(record_id) or abort(404)
+        if collection == 'files':
+            record = cls.from_id(str(record_id) or abort(404))
+        else:
+            record = cls.from_id(int(record_id)) or abort(404)
 
         try:
             result = record.delete(user=user)
@@ -954,4 +1020,3 @@ class Template(Resource):
         template_collection = DB.handle[f'{collection}_templates']
         template_collection.find_one({'name': template_name}) or abort(404)
         template_collection.delete_one({'name': template_name}) or abort(500)
-    

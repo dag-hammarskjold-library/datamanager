@@ -27,7 +27,7 @@ def test_all_routes(client):
 
 def test_collections_list(client, records):
     data = json.loads(client.get(f'{API}/collections').data)
-    assert len(data['results']) == 2
+    assert len(data['results']) == 3
     assert f'{API}/bibs' in data['results']
     assert f'{API}/auths' in data['results']
     

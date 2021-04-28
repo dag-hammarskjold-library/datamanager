@@ -2307,16 +2307,36 @@ class MarcRecord extends HTMLElement {
             // create the files framework
             if (this.filesAvailable.length > 0) {
                 // adding the logic
+                // console.log(this.filesAvailable)
                 let myHeader = document.createElement("H5");
-                myHeader.innerHTML = "<span class='badge badge-pill badge-success'>" + this.filesAvailable.length + "</span> File(s) available , Click the file path to display the file!!! ";
+                myHeader.innerHTML = "<span class='badge badge-pill badge-success'>" + this.filesAvailable.length + "</span> file(s) available.";
                 let myTable = document.createElement("TABLE");
                 myTable.className = "table table-striped"
                 myTable.innerHTML += "<div>"
-                myTable.innerHTML += "<table><thead> <tr><th>Language</th><th>File path</th></tr></thead><tbody>";
+                myTable.innerHTML += "<table><thead> <tr><th>Language</th><th>Links</th></tr></thead><tbody>";
                 let i;
                 let myTableContent = "";
                 for (i = 0; i < this.filesAvailable.length; i++) {
-                    myTableContent += "<tr><td><span class='text-center ml-2'>" + this.filesAvailable[i]['language'] + "</span></td><td><a href='" + this.filesAvailable[i]['url'] + "' target='_blank'>" + this.filesAvailable[i]['url'] + "</a></td></tr>"
+                    let myTr = document.createElement("TR")
+                    let myTdLangs = document.createElement("TD")
+                    myTdLangs.innerText = this.filesAvailable[i]['language']
+                    let myTdLinks = document.createElement("TD")
+                    let myA_newTab = document.createElement("A")
+                    myA_newTab.href = this.filesAvailable[i]['url']
+                    myA_newTab.target = "_blank"
+                    myA_newTab.innerText = "Open in New Tab"
+                    myTdLinks.appendChild(myA_newTab)
+                    let mySpan = document.createElement("span")
+                    mySpan.classList.add('p-4')
+                    myTdLinks.appendChild(mySpan)
+                    let myA_download = document.createElement("A")
+                    myA_download.href = this.prefixUrl + 'files/' + this.filesAvailable[i]['id'] + "?action=download"
+                    myA_download.innerText = 'Download'
+                    //myA_download.dispatchEvent(new MouseEvent('click'));                
+                    myTdLinks.appendChild(myA_download)
+                    myTr.appendChild(myTdLangs)
+                    myTr.appendChild(myTdLinks)
+                    myTable.appendChild(myTr)
                 }
                 myTable.innerHTML += myTableContent + "</tbody></table></div>"
                 divContent.appendChild(myHeader);

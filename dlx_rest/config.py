@@ -6,6 +6,8 @@ import boto3
 class Config(object):
     DEBUG = False
     TESTING = False
+
+    bucket = 'undl-files'
     
     if 'DLX_REST_TESTING' in os.environ:
         connect_string = 'mongomock://localhost'
@@ -44,3 +46,4 @@ class Config(object):
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", os.urandom(24))
     BIB_COLLECTION = 'bibs'
     AUTH_COLLECTION = 'auths'
+    FILE_COLLECTION = 'files'
