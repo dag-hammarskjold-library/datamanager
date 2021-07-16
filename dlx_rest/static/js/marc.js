@@ -1784,6 +1784,10 @@ class MarcRecord extends HTMLElement {
 
                 // adding the logic to call to edit a record
                 btnEditRecord.addEventListener("click", () => {
+                    // deactivate the styling for the divContent
+
+                    divContent.style.overflowY="";
+                    divContent.style.height="";
                     this.typeEditMode = "FULLRECORD"
                     this.displayFullRecordEditMode();
                 });

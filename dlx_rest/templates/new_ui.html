@@ -1,11 +1,16 @@
 {% extends 'base1.html' %} {% block content %} 
   <!-- New UI component integration --> 
   {% if current_user.is_active %}
-  <div style="background-color:grey;">
-    <div class="row" id="new_ui_component" v-show="true">
-        <basketcomponent></basketcomponent>
-        <multiplemarcrecordcomponent urls="https://czwkm00smd.execute-api.us-east-1.amazonaws.com/dev/api/marc/bibs/records/1278539,https://czwkm00smd.execute-api.us-east-1.amazonaws.com/dev/api/marc/bibs/records/127853"></multiplemarcrecordcomponent>      
-        <warningcomponent></warningcomponent>
+  <div style="background-color:grey;">     
+
+    <div id="new_ui_component" v-show="true">  
+          <headercomponent></headercomponent>
+          <messagecomponent url="userprofile/my_profile/basket" prefix="{{prefix}}"></messagecomponent>
+      <div class="row">
+          <basketcomponent url="userprofile/my_profile/basket" prefix="{{prefix}}" ></basketcomponent>
+          <multiplemarcrecordcomponent urls="https://czwkm00smd.execute-api.us-east-1.amazonaws.com/dev/api/marc/bibs/records/1278539,https://czwkm00smd.execute-api.us-east-1.amazonaws.com/dev/api/marc/bibs/records/127853"></multiplemarcrecordcomponent>      
+          <warningcomponent></warningcomponent>
+        </div>
     </div> 
   </div>
   {% endif %}

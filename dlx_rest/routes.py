@@ -21,7 +21,8 @@ def index():
 
 @app.route('/newui')
 def newui():
-    return render_template('new_ui.html', title="New UI")
+    this_prefix = url_for('doc', _external=True)
+    return render_template('new_ui.html', title="New UI", prefix=this_prefix)
 
 # Authentication
 @login_manager.user_loader
